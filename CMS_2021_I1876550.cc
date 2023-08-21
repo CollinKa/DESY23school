@@ -35,47 +35,14 @@ namespace Rivet {
     /// Book histograms and initialise projections before the run
     void init() {
 
-      // Initialise and register projections
 
-      // The basic final-state projection:
-      // all final-state particles within
-      // the given eta acceptance
-      //const UnstableParticles ufs(Cuts::abseta < 4.9);//should I contiue to use this one? check paper!
-      //const ChargedFinalState cfs;
-      //declare(cfs,"FS"); 
-      //declare(ufs,"UFS");
+      //FastJets jets(veto, FastJets::ANTIKT, 0.6); //I probably need to change the number 0.6  see https://arxiv.org/pdf/1112.4432.pdf
+      //declare(jets, "jets");
       declare(UnstableParticles(),"UFS");
 
-      // The final-state particles declared above are clustered using FastJet with
-      // the anti-kT algorithm and a jet-radius parameter 0.4
-      // muons and neutrinos are excluded from the clustering
-      //FastJets jetfs(fs, FastJets::ANTIKT, 0.4, JetAlg::Muons::NONE, JetAlg::Invisibles::NONE);
-      //declare(jetfs, "jets");
-
-      // FinalState of direct photons and bare muons and electrons in the event
-      //DirectFinalState photons(Cuts::abspid == PID::PHOTON);
-      //DirectFinalState bare_leps(Cuts::abspid == PID::MUON || Cuts::abspid == PID::ELECTRON);
-
-      // Dress the bare direct leptons with direct photons within dR < 0.1,
-      // and apply some fiducial cuts on the dressed leptons
-      //Cut lepton_cuts = Cuts::abseta < 2.5 && Cuts::pT > 20*GeV;
-      //DressedLeptons dressed_leps(photons, bare_leps, 0.1, lepton_cuts);
-      //declare(dressed_leps, "leptons");
-
-      // Missing momentum
-      //declare(MissingMomentum(fs), "MET");
 
       // Book histograms
-/*
-      // specify custom binning
-      book(_h["XXXX"], "myh1", 20, 0.0, 100.0);
-      book(_h["YYYY"], "myh2", logspace(20, 1e-2, 1e3));
-      book(_h["ZZZZ"], "myh3", {0.0, 1.0, 2.0, 4.0, 8.0, 16.0});
-      // take binning from reference data using HEPData ID (digits in "d01-x01-y01" etc.)
-      book(_h["AAAA"], 1, 1, 1);
-      book(_p["BBBB"], 2, 1, 1);
-      book(_c["CCCC"], 3, 1, 1);
-*/
+
       book(_h["D*P"], 1, 1, 1);
       book(_h["D0P"], 1, 1, 2);
       book(_h["DP"], 1, 1, 3);
@@ -90,91 +57,83 @@ namespace Rivet {
     /// Perform the per-event analysis
     void analyze(const Event& event) {
 
+      // get the jets
+      /*
+      Jets jets;
+      for (const Jet& jet : apply<FastJets>(event, "jets").jetsByPt(4.0*GeV)) {
+        if ( jet.abseta() < 2.1 ) jets.push_back(jet);
+      }
+      */
 
+      //get the excited prompt D meson
       const UnstableParticles& ufs = apply<UnstableParticles>(event, "UFS");
       //particle code: 411 = D+  421 = "D0" 413 = "D*+"
       //we only interest about the "+" D meson
       for(const Particle& p : ufs.particles()) {
         if (p.abspid() == 411 ||  p.abspid() == 413 || p.abspid() == 421) {
-          ConstGenVertexPtr gv = p.genParticle()->production_vertex();
-          bool nonPromt = false;
+          ConstGenVertexPtr gv = p.genParticle()->production_vertex(); //gv represent the where the particle being created
           
-          //if have vertex? bug
-          /*
-          if(gv) {
-            for (ConstGenVertexPtr pi: HepMCUtils::particles(gv,Relatives::ANCESTORS)){ //check the particle history
-              const PdgId pid2 = pi->pdg_id();
-              if (PID::isHadron(pid2) && PID::hasBottom(pid2)) {  //hasBottom:bottom hardon or bottom quark?
-                nonPromt = true;
-                break;
-              } 
-            }
+          if (gv) {  // Check if gv is not a null pointer
+            double x = gv->position().x();
+            double y = gv->position().y();
+            double z = gv->position().z();
+            std::cout << x << " " << y << " " << z << std::endl;
           }
-          */
           
+          //bool nonPromt = false;
+          bool nonPromt = true;
+          
+          if(gv) {
+            //for (ConstGenVertexPtr pi: HepMCUtils::particles(gv,Relatives::ANCESTORS)){ //check the particle history  issue:GenVertex has no member name pdg_id
+            //for (const GenParticle* pi: HepMCUtils::particles(gv,Relatives::ANCESTORS)){   //‘GenParticle’ does not name a type; did you mean ‘Particle’?
+            //for (const GenParticle& pi : HepMCUtils::particles(gv,Relatives::ANCESTORS)){
+              //const PdgId pid2 = pi.pdg_id();   //I really don't know hot to use it
+            for(const Particle& p : HepMCUtils::particles(gv,Relatives::ANCESTORS)){    //get the ancestor of particle at specific vertex
+              //const PdgId pid2 = p.pdgId();
+              const PdgId pid2 = p.pid();
+              if (PID::isHadron(pid2) && PID::hasBottom(pid2)) {  //B Hadron -> non prompt
+                nonPromt = true;
+                break; // change another particle
+              }
+              
+              //adding new cut
+              if (PID::isHadron(pid2) && PID::hasCharm(pid2)) {  //B Hadron -> non prompt
+                nonPromt = false;
+
         
-        double abseta = p.abseta();
-        double pT = p.perp();
-        double GeV = p.E();
-        double eta = p.eta();
-        if(abseta > 2.1 && !nonPromt) break;
-        if(pT < 4. || pT > 100.) break;
-        //D+
-        if (p.abspid()==411){
-          _h["DP"]->fill(pT/GeV);
-          _h["Deta"]->fill(eta/GeV);
-        }
-          
-        //D0
-        if (p.abspid()==421){
-          _h["D0P"]->fill(pT/GeV);
-          _h["D0eta"]->fill(eta/GeV);
-        }
-          
-        //D*
-        if (p.abspid()==413) {
-          _h["D*P"]->fill(pT/GeV);
-          _h["D*eta"]->fill(eta/GeV);
-        }
-          
+                double abseta = p.abseta();
+                double pT = p.perp();
+                //double GeV = p.E();
+                double eta = p.eta();
+                if(abseta > 2.1 && !nonPromt) break;
+                if(pT < 4. || pT > 100.) break;
+                //D+
+                if (p.abspid()==411){
+                  _h["DP"]->fill(pT/GeV);
+                  _h["Deta"]->fill(eta/GeV);
+                }
+                  
+                //D0
+                if (p.abspid()==421){
+                  _h["D0P"]->fill(pT/GeV);
+                  _h["D0eta"]->fill(eta/GeV);
+                }
+                  
+                //D*
+                if (p.abspid()==413) {
+                  _h["D*P"]->fill(pT/GeV);
+                  _h["D*eta"]->fill(eta/GeV);
+            
+                }
+              }
+            }
+          }         
         }
 
       }
 
       
-      // Retrieve dressed leptons, sorted by pT
-      //Particles leptons = apply<FinalState>(event, "leptons").particles();
-      
-      //Should I apply a leptop cut? like this?
-      //Particles quark = apply<FinalState>(event, "quarks").particles();
 
-      // Retrieve clustered jets, sorted by pT, with a minimum pT cut
-      //Jets jets = apply<FastJets>(event, "jets").jetsByPt(Cuts::pT > 30*GeV);
-
-      //Q: fast Jets?
-      //Jets jets = apply<FastJets>(event, "jets").jetsByPt(Cuts::pT > 4*GeV);
-      
-
-      // Remove all jets within dR < 0.2 of a dressed lepton
-      //idiscardIfAnyDeltaRLess(jets, leptons, 0.2);
-
-      // Select jets ghost-associated to B-hadrons with a certain fiducial selection
-      //Jets bjets = filter_select(jets, hasBTag(Cuts::pT > 5*GeV && Cuts::abseta < 2.5));
-      //Note: I am interest about the D_meson! with 4<pT<100GeV & |eta| < 2.1
-      //Jets bjets = filter_select(jets, hasDTag(Cuts::pT < 100*GeV && Cuts::pT > 4*GeV && Cuts::abseta < 2.1));
-
-
-      // Veto event if there are no b-jets
-      //if (bjets.empty()) vetoEvent;
-      //Note: check D jets
-      //if (Djets.empty()) vetoEvent;
-      
-
-      // Apply a missing-momentum cut
-      //if (apply<MissingMomentum>(event, "MET").missingPt() < 30*GeV)  vetoEvent;
-
-      // Fill histogram with leading b-jet pT
-      //_h["XXXX"]->fill(bjets[0].pT()/GeV);
 
     }
 
