@@ -100,7 +100,13 @@ namespace Rivet {
               if (PID::isHadron(pid2) && PID::hasCharm(pid2)) {  //B Hadron -> non prompt
                 nonPromt = false;
 
-        
+                //adding childer or decendant check for Pion and Kaon
+                
+                // Check if the vertex has children containing a pion and a kaon
+                bool hasPion = HepMCUtils::hasChildWith(gv, [](const Particle* p) { return p.pid() == PID::PI_PLUS; });
+                bool hasKaon = HepMCUtils::hasChildWith(gv, [](const Particle* p) { return p.pid() == PID::K_PLUS; });
+                
+                if (hasPion && hasKaon) {
                 double abseta = p.abseta();
                 double pT = p.perp();
                 //double GeV = p.E();
@@ -125,6 +131,9 @@ namespace Rivet {
                   _h["D*eta"]->fill(eta/GeV);
             
                 }
+
+                }
+                
               }
             }
           }         
